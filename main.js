@@ -99,7 +99,18 @@ async function handlePut(code, req, res) {
   await saveToCache(code, data); // створює файл або замінює наявний
   send(res, 201, `Картинку для коду ${code} збережено`);
 }
-
+async function handleDelete(code, res) {
+  try {
+    await fs.unlink(filePath(code));
+  } catch (err) {
+    if (err.code === 'ENOENT') {
+      send(res, 404, `Картинки для коду ${code} немає в кеші`);
+      return;
+    }
+    throw err; // інша помилка диска піде в загальний catch і дасть 500
+  }
+  send(res, 200, `Картинку для коду ${code} видалено з кешу`);
+}
 // Єдиний дозволений колбек: обробник запиту
 const server = http.createServer(async (req, res) => {
   try {
@@ -119,7 +130,7 @@ const server = http.createServer(async (req, res) => {
     } else if (req.method === 'PUT') {
       await handlePut(code, req, res);
     } else {
-      send(res, 405, 'Цей метод ще не реалізований', { Allow: 'GET, PUT' });
+      await handleDelete(code, res);
     }
   } catch (err) {
     console.error(err);
