@@ -4,6 +4,7 @@ const path = require('path');
 const { once } = require('events');
 const { program } = require('commander');
 const superagent = require('superagent');
+const { buffer } = require('stream/consumers');
 
 // -h за замовчуванням зайнятий під help, тому help переносимо на --help
 program
@@ -88,6 +89,16 @@ async function handleGet(code, res) {
   res.writeHead(200, { 'Content-Type': 'image/jpeg', [SOURCE_HEADER]: 'http.cat' });
   res.end(data);
 }
+async function handlePut(code, req, res) {
+  // тіло запиту надходить потоком; buffer() збирає його цілком і повертає проміс
+  const data = await buffer(req);
+  if (data.length === 0) {
+    send(res, 400, 'Тіло запиту порожнє: передайте картинку');
+    return;
+  }
+  await saveToCache(code, data); // створює файл або замінює наявний
+  send(res, 201, `Картинку для коду ${code} збережено`);
+}
 
 // Єдиний дозволений колбек: обробник запиту
 const server = http.createServer(async (req, res) => {
@@ -105,8 +116,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET') {
       await handleGet(code, res);
+    } else if (req.method === 'PUT') {
+      await handlePut(code, req, res);
     } else {
-      send(res, 405, 'Цей метод ще не реалізований', { Allow: 'GET' });
+      send(res, 405, 'Цей метод ще не реалізований', { Allow: 'GET, PUT' });
     }
   } catch (err) {
     console.error(err);
